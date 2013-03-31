@@ -32,7 +32,7 @@ namespace CacheCow.Tests.Server
 			var linkedUrls = new []{"url1", "url2"};
 			var cachingHandler = new CachingHandler(entityTagStore)
 									{
-										LinkedRoutePatternProvider = (url, mthd) => linkedUrls
+										LinkedRoutePatternProvider = (url, mthd, headers) => linkedUrls
 									};
 			var entityTagKey = new CacheKey(TestUrl, new string[0], routePattern);
 			var response = new HttpResponseMessage();
@@ -51,6 +51,37 @@ namespace CacheCow.Tests.Server
 
 		}
 
+        [TestCase("POST")]
+        public static void TestCacheInvalidationForLinkedResouces(string method) {
+            // setup
+            var mocks = new MockRepository();
+            var request = new HttpRequestMessage(new HttpMethod(method), TestUrl);
+            string routePattern = "http://myserver/api/stuffs/*";
+            var entityTagStore = mocks.StrictMock<IEntityTagStore>();
+
+            var cachingHandler = new CachingHandler(entityTagStore) {
+                LinkedRoutePatternProvider =
+                    (url, mthd, headers) => headers.Where(_ => _.Key == "Link")
+                                                   .SelectMany(_ => _.Value)
+                                                   .Select(_ => System.Text.RegularExpressions.Regex.Match(_, @"<(?<uri>.+?)>").Groups["uri"].Value)
+            };
+            var entityTagKey = new CacheKey(TestUrl, new string[0], routePattern);
+            var response = new HttpResponseMessage();
+            response.Headers.Add("Link", "</Now/Invalid/Uri>; rel=\"invalidates\"");
+            var invalidateCache = cachingHandler.InvalidateCache(entityTagKey, request, response);
+            entityTagStore.Expect(x => x.RemoveAllByRoutePattern(routePattern)).Return(1);
+            entityTagStore.Expect(x => x.RemoveAllByRoutePattern("/Now/Invalid/Uri")).Return(0);
+            mocks.ReplayAll();
+
+            // run
+            invalidateCache();
+
+            // verify
+            mocks.VerifyAll();
+
+
+        }
+
 		[TestCase("PUT")]
 		[TestCase("POST")]
         [TestCase("PATCH")]
@@ -65,7 +96,7 @@ namespace CacheCow.Tests.Server
 			var linkedUrls = new[] { "url1", "url2" };
 			var cachingHandler = new CachingHandler(entityTagStore)
 			{
-				LinkedRoutePatternProvider = (url, mthd) => linkedUrls
+                LinkedRoutePatternProvider = (url, mthd, headers) => linkedUrls
 			};
 			var entityTagKey = new CacheKey(TestUrl, new string[0], routePattern);
 			var response = new HttpResponseMessage();

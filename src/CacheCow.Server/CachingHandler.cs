@@ -78,7 +78,7 @@ namespace CacheCow.Server
 			CacheKeyGenerator = (resourceUri, headers) =>
 				new CacheKey(resourceUri, headers.SelectMany(h => h.Value));
 
-			LinkedRoutePatternProvider = (uri, method) => new string[0]; // a dummy
+			LinkedRoutePatternProvider = (uri, method, headers) => new string[0]; // a dummy
 			UriTrimmer = (uri) => uri.PathAndQuery;
 
             // infinite - Never refresh
@@ -138,10 +138,10 @@ namespace CacheCow.Server
 		/// <summary>
 		/// This is a function to allow the clients to invalidate the cache
 		/// for related URLs.
-		/// Current resourceUri and HttpMethod is passed and a list of URLs
+		/// Current resourceUri, HttpMethod and response headers are passed and a list of URLs
 		/// is retrieved and cache is invalidated for those URLs.
 		/// </summary>
-		public Func<string, HttpMethod, IEnumerable<string>> LinkedRoutePatternProvider { get; set; }
+		public Func<string, HttpMethod, HttpResponseHeaders, IEnumerable<string>> LinkedRoutePatternProvider { get; set; }
 
 		/// <summary>
 		/// A function that gets the Uri (normally request) and extracts important bits
@@ -359,7 +359,7 @@ namespace CacheCow.Server
 					_entityTagStore.RemoveAllByRoutePattern(cacheKey.RoutePattern);
 
 					// remove all related URIs
-					var linkedUrls = LinkedRoutePatternProvider(uri, request.Method);
+					var linkedUrls = LinkedRoutePatternProvider(uri, request.Method, response.Headers);
 					foreach (var linkedUrl in linkedUrls)
 						_entityTagStore.RemoveAllByRoutePattern(linkedUrl);
 
